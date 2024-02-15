@@ -18,7 +18,7 @@ QR Attendance:
 			header name "x-api-key"
 
 
-		[1] '/api/check/member/' :
+		[1] '/api/login/member/' :
 		
 			# How To Use:
 				Used to check if the member is regiestered or not 
@@ -38,7 +38,9 @@ QR Attendance:
 		[2] '/api/create/event/' : 
 
 			# How to use
-
+				Used to create an event "Class" it will check if the provided presenter username is existing or not if so it
+				will create a new event (note that the event title is unique), vaildation must be done before sending the args
+				
 
 
 			# Args

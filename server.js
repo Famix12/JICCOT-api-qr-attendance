@@ -34,11 +34,11 @@ const apiKeyAuthMiddleware = (req, res, next) => {
     }
   };
 
-async function checkMember(mamberData) {
+async function memberLogin(mamberData) {
 
     const { data, error } = await supabase
     .from("members")
-    .select("username,password,role").eq("username", mamberData.username);
+    .select("id,FName,LName,username,password,role").eq("username", mamberData.username);
   if (error) {
     console.log("error", error);
     return error;
@@ -62,23 +62,60 @@ try {
 }
 
 if(checked){
-  return { username : data[0].username, role : data[0].role }
+  return {
+      mamberID : data[0].id,
+      FName : data[0].FName,
+      LName : data[0].LName,
+      username : data[0].username,
+      role : data[0].role
+    }
+  
 }
   return "wrong password"
 }
 
-app.post("/api/check/member/", apiKeyAuthMiddleware ,async (req, res) => {
+app.post("/api/login/member/", apiKeyAuthMiddleware ,async (req, res) => {
 
   const data = {
     username: req.body.username,
     password: req.body.password,
   };
 
-  const info = await checkMember(data);
+  const info = await memberLogin(data);
 
   return res.json({info});
 });
 
+// async function checkPresenter(PresenterUsername){
+//   const { data, error } = await supabase
+//   .from("members")
+//   .select("username").eq("username", PresenterUsername);
+// console.log("checkPresenter",data);
+// if (error) {
+//   console.log("error", error);
+//   return({"error" : error, "exist" : false});
+// }
+// return({"exist" : true});
+// }
+
+async function checkPresenter(PresenterUsername) {
+  const { data, error } = await supabase
+    .from("members")
+    .select("FName, LName")
+    .eq("username", PresenterUsername);
+
+  if (error) {
+    console.log("error", error);
+    return { msg: error, exist: false };
+  }
+
+  if (data && data.length > 0) {
+    const { FName, LName } = data[0];
+    return { exist: true, FName, LName };
+  } else {
+    return { exist: false, msg: "Presenter not exist" };
+  }
+}
 
 
 async function CreateEvent(eventData) {
@@ -91,41 +128,207 @@ async function CreateEvent(eventData) {
    Location : eventData.location,
    StartDate : eventData.startDate,
    EndDate : eventData.endDate,
-  });
+  }).select();
 
   if (error) {
   console.log("[ req error ] :", error)
   if (error.message.includes("key")) {
       // Handle the case where the email already exists
-      return({ error: "Event already exists" });
+      return({ error: "Event Title already exists" });
     } else {
       console.error("Error inserting data:", error.message);
       return({ error: "Internal Server Error" });
     }
   }
 
-  return ({success: true});
+  // console.log(data)
+  return ({success: true, EventID : data[0].EventID});
 }
-
-
-
 
 app.post("/api/create/event/", apiKeyAuthMiddleware ,async (req, res) => {
   
-  const data = {
-    title: req.body.title,
-    type: req.body.type,
-    details: req.body.details,
-    startDate: req.body.startDate,
-    endDate: req.body.endDate,
-    location: req.body.location,
-    presenter: req.body.presenter
-  };
+  // console.log(req.body.presenter)
+  const checkPresenterEx = await checkPresenter(req.body.presenter)
+  // console.log("checkPresenterEx.FName", checkPresenterEx.FName)
 
-  const info = await CreateEvent(data)
+  if(checkPresenterEx.exist){
+    const data = {
+      title: req.body.title,
+      type: req.body.type,
+      details: req.body.details,
+      // date format : 2024-02-10 00:00:00+00
+      startDate: req.body.startDate,
+      endDate: req.body.endDate,
+      location: req.body.location,
+      presenter: req.body.presenter
+    };
+  
+    const info = await CreateEvent(data)
+    return res.json({info});
+  }
+  return res.json({info : checkPresenterEx.msg})
 
-  return res.json({info});
+});
 
+
+app.post("/api/remove/event/",apiKeyAuthMiddleware, async (req, res) => {
+
+});
+
+app.get("/api/list/event/",apiKeyAuthMiddleware, async (req, res) => {
+    const {data, error} = await supabase.from("events").select("EventID,EventTitle,EventType")
+    if(error){
+      return res.json({info : error})
+    }
+    return res.json({Events : data})
+});
+
+app.post("/api/enrollTo/event/", apiKeyAuthMiddleware, async (req, res) => {
+
+  if (!req.body.EventID || !req.body.MemberID ){
+    console.log(req.body)
+    return res.json({ success: false, info: "Invalid data provided" });
+}
+
+try {
+  // Insert enrollment data into the database
+  const { data, error } = await supabase.from("attendance").insert({
+      EventID: req.body.EventID,
+      MemberID: req.body.MemberID
+  });
+
+  // Check for duplicate key error
+  if (error && error.message.includes("duplicate")) {
+      console.error(error);
+      return res.json({ success: false, info: "Already Enrolled" });
+  }
+
+  // Handle other errors
+  if (error) {
+      console.error(error);
+      return res.json({ success: false, info: "An error occurred while enrolling" });
+  }
+
+  // Enrollment successful
+  return res.json({ success: true ,info : "Enrolled successfully" });
+} catch (error) {
+  console.error(error);
+  return res.status(500).json({ success: false, info: "Internal server error" });
+}
+});
+
+app.post("/api/attened/present/", apiKeyAuthMiddleware, async (req, res)=> {
+  if (!req.body.EventID || !req.body.MemberID ){
+    console.log(req.body)
+    return res.json({ success: false, info: "Invalid data provided" });
+  }
+
+  const { error } = await supabase.from("attendance").update({'attended' : true}).eq("EventID",req.body.EventID).eq("EventID",req.body.EventID)
+  if(error){
+    // console.log(error)
+    return res.json({ status : false ,info : "Memeber already attended", error : error})
+  }
+  return res.json({ status : true, info : "Attended successfully"})
+
+});
+
+app.post("/api/attened/absent/", apiKeyAuthMiddleware, async (req, res)=> {
+  if (!req.body.EventID || !req.body.MemberID ){
+    console.log(req.body)
+    return res.json({ success: false, info: "Invalid data provided" });
+  }
+
+  const { error } = await supabase.from("attendance").update({'attended' : false}).eq("EventID",req.body.EventID).eq("EventID",req.body.EventID)
+  if(error){
+    // console.log(error)
+    return res.json({ status : false ,info : "Memeber already absent", error : error})
+  }
+  return res.json({ status : true, info : "Member marked absent successfully"})
+
+});
+
+// app.get("/api/list/event/members/", apiKeyAuthMiddleware, async (req, res) => {
+
+//   if (!req.body.EventID) {
+//     return res.json({ success: false, info: "EventID is required" });
+//   }
+
+//   try {
+//     // Retrieve list of members attending the specified event
+//     // const { data, error } = await supabase
+//     //   .from("attendance")
+//     //   .select("MemberID, attended")
+//     //   .eq("EventID", req.body.EventID);
+//     const { data, error } = await supabase
+//       .from("attendance")
+//       .select("attendance.MemberID, attendance.attended, members.id, members.username, members.FName, members.LName")
+//       .eq("EventID", req.query.EventID)
+//       .eq("attendance.MemberID", "members.id")
+
+//     if (error) {
+//       console.error(error);
+//       return res.json({ success: false, info: "An error occurred while fetching event members" });
+//     }
+
+//     return res.json({ success: true, data });
+//   } catch (error) {
+//     console.error(error);
+//     return res.json({ success: false, info: "Internal server error" });
+//   }
+// });
+
+
+// API endpoint for retrieving list of event members with additional details from the "members" table
+app.get("/api/list/event/members/", apiKeyAuthMiddleware, async (req, res) => {
+  // Check if EventID is provided
+  if (!req.body.EventID) {
+    return res.status(400).json({ success: false, info: "EventID is required" });
+  }
+
+  try {
+    // Retrieve list of members attending the specified event from the "attendance" table
+    const { data: attendanceData, error: attendanceError } = await supabase
+      .from("attendance")
+      .select("MemberID, attended")
+      .eq("EventID", req.body.EventID);
+
+    if (attendanceError) {
+      console.error(attendanceError);
+      return res.status(500).json({ success: false, info: "An error occurred while fetching event members" });
+    }
+
+    // Extract MemberIDs from the attendance data
+    const memberIDs = attendanceData.map(entry => entry.MemberID);
+
+    // Retrieve member details (username, FName, LName) based on the extracted MemberIDs from the "members" table
+    const { data: memberData, error: memberError } = await supabase
+      .from("members")
+      .select("id, username, FName, LName")
+      .in("id", memberIDs);
+
+    if (memberError) {
+      console.error(memberError);
+      return res.status(500).json({ success: false, info: "An error occurred while fetching member details" });
+    }
+
+    // Combine attendance data with member details
+    const eventMembers = attendanceData.map(attendanceEntry => {
+      const memberDetail = memberData.find(memberEntry => memberEntry.id === attendanceEntry.MemberID);
+      return {
+        MemberID: attendanceEntry.MemberID,
+        attended: attendanceEntry.attended,
+        username: memberDetail ? memberDetail.username : null,
+        FName: memberDetail ? memberDetail.FName : null,
+        LName: memberDetail ? memberDetail.LName : null
+      };
+    });
+
+    // Send the list of event members with details
+    return res.json({ success: true, data: eventMembers });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ success: false, info: "Internal server error" });
+  }
 });
 
 app.listen(process.env.SERVER_PORT, () => {

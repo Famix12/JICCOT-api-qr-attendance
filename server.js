@@ -22,7 +22,6 @@ const supabase = supabaseConnect.createClient(
   process.env.SUPABASE_KEY
 );
 
-
 const apiKeyAuthMiddleware = (req, res, next) => {
     const apiKey = req.headers['x-api-key']; 
   
@@ -39,13 +38,13 @@ async function checkMember(mamberData) {
 
     const { data, error } = await supabase
     .from("members")
-    .select("username,password").eq("username", mamberData.username);
+    .select("username,password,role").eq("username", mamberData.username);
   if (error) {
     console.log("error", error);
     return error;
   }
   if (data.length === 0) {
-    return "user not found";
+    return "User not found";
   }
 
 var checked = false;
@@ -59,15 +58,15 @@ try {
 
     checked = result;
 } catch (err) {
-    console.error("bcrypt.compare error:", err);
+    console.error("bcrypt error:", err);
 }
 
-
-return checked;
-
+if(checked){
+  return { username : data[0].username, role : data[0].role }
+}
+  return "wrong password"
 }
 
-// return true if the member credentials are valid else return false
 app.post("/api/check/member/", apiKeyAuthMiddleware ,async (req, res) => {
 
   const data = {
@@ -75,12 +74,59 @@ app.post("/api/check/member/", apiKeyAuthMiddleware ,async (req, res) => {
     password: req.body.password,
   };
 
-  const mamber = await checkMember(data);
+  const info = await checkMember(data);
 
-  return res.json({mamber});
+  return res.json({info});
 });
 
 
+
+async function CreateEvent(eventData) {
+
+  const { data, error } = await supabase.from("events").insert({
+   EventType : eventData.type,
+   EventTitle : eventData.title,
+   EventDetails : eventData.details,
+   Presenter : eventData.presenter,
+   Location : eventData.location,
+   StartDate : eventData.startDate,
+   EndDate : eventData.endDate,
+  });
+
+  if (error) {
+  console.log("[ req error ] :", error)
+  if (error.message.includes("key")) {
+      // Handle the case where the email already exists
+      return({ error: "Event already exists" });
+    } else {
+      console.error("Error inserting data:", error.message);
+      return({ error: "Internal Server Error" });
+    }
+  }
+
+  return ({success: true});
+}
+
+
+
+
+app.post("/api/create/event/", apiKeyAuthMiddleware ,async (req, res) => {
+  
+  const data = {
+    title: req.body.title,
+    type: req.body.type,
+    details: req.body.details,
+    startDate: req.body.startDate,
+    endDate: req.body.endDate,
+    location: req.body.location,
+    presenter: req.body.presenter
+  };
+
+  const info = await CreateEvent(data)
+
+  return res.json({info});
+
+});
 
 app.listen(process.env.SERVER_PORT, () => {
   console.log(`listening on port ${process.env.SERVER_PORT}`);

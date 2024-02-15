@@ -1,0 +1,53 @@
+QR Attendance: 
+
+	- Create Class field : 
+		[+] [-] [/] 
+		
+		[/] field name -> create an event
+		[+] dropdown menu for the event type ( workshop | bootcamp | meeting )
+		[+] Event Details field
+		[+] date picker instead of strating period and end period
+		[+] Location
+		[+] Presenter username
+		
+	
+	- API Functions :
+	
+		[*] NOTE : 
+			api key should be in the header of each request 
+			header name "x-api-key"
+
+
+		[1] '/api/check/member/' :
+		
+			# How To Use:
+				Used to check if the member is regiestered or not 
+				if so it will return the username & the role, and
+				if the password is wrong it will return "wrong password"
+				or if the username is wrong it will return "User not found"
+				
+			# Args
+				{
+					"username" : "USERNAME", 
+					"password" : "PASSWD" 
+				}
+			
+			
+			
+			
+		[2] '/api/create/event/' : 
+
+			# How to use
+
+
+
+			# Args
+			{
+				"title": "CTF Workshop",
+			    "type": "Workshop",
+			    "details": "Capture the falg workshop ...",
+			    "startDate": "2024-02-10",
+			    "endDate": "2024-02-13",
+			    "location": "MIT,M037",
+			    "presenter": "Famix"
+			}
